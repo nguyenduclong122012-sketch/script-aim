@@ -1,0 +1,528 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local NazilGui = Instance.new("ScreenGui")
+NazilGui.Name = "NazilProMaxMenu"
+NazilGui.ResetOnSpawn = false
+NazilGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+
+local PinkColor = Color3.fromRGB(255, 20, 147)
+local DarkBgColor = Color3.fromRGB(20, 18, 22)
+
+-- File cấu hình Auto Save & Auto Executor (Sử dụng writefile / readfile của Executor)
+local SaveFileName = "NazilProMax_Config.json"
+
+-- Trạng thái tính năng mặc định
+local ESP_Line_Enabled = false 
+local ESP_Wallhack_Enabled = false
+local ESP_Box_Enabled = false         
+local ESP_Skeleton_Enabled = false    
+local Aim_Mobile_Enabled = false      
+local Hitbox_Expander_Enabled = false 
+local Auto_Headshot_Enabled = false   
+local FOV_Visible = false             
+local Aim_FOV = 180 
+local Graphics_Low_Enabled = false    
+
+-- Trạng thái tab DY
+local Fly_Enabled = false
+local Clip_Enabled = true 
+local Wall_Shoot_Enabled = false
+
+-- Thêm biến lưu nội dung Auto Executor
+local Auto_Executor_Code = ""
+
+-- Offset điều chỉnh vị trí vòng aim
+local FOV_OffsetX = 0
+local FOV_OffsetY = 0
+
+local Hitbox_Size = Vector3.new(14, 14, 14) 
+local IsFiring = false        
+local ToolActivated = false   
+
+local LockedTarget = nil
+local OldNamecall
+local ESP_Drawings = {}
+
+-- Khai báo trước các biến nút bấm để hàm Load/Save có thể gọi cập nhật giao diện
+local SwitchLineBtn, SwitchWallBtn, SwitchBoxBtn, SwitchSkeletonBtn
+local SwitchAutoHeadshotBtn, SwitchAimMobileBtn, SwitchHitboxBtn, SwitchFOVCircleBtn
+local SwitchFlyBtn, SwitchNoclipBtn, SwitchWallShootBtn, SwitchGraphicsBtn
+local FOVFrame
+local AutoExecTextBox, SwitchAutoSaveBtn, StatusAutoSaveLabel
+
+-- Trạng thái Auto Save (Mặc định BẬT)
+local Auto_Save_Enabled = true
+
+-- Hàm Lưu Cấu Hình (Auto Save)
+local function SaveConfig()
+    if not Auto_Save_Enabled then return end
+    if not writefile then return end
+    local configData = {
+        ESP_Line_Enabled = ESP_Line_Enabled,
+        ESP_Wallhack_Enabled = ESP_Wallhack_Enabled,
+        ESP_Box_Enabled = ESP_Box_Enabled,
+        ESP_Skeleton_Enabled = ESP_Skeleton_Enabled,
+        Aim_Mobile_Enabled = Aim_Mobile_Enabled,
+        Hitbox_Expander_Enabled = Hitbox_Expander_Enabled,
+        Auto_Headshot_Enabled = Auto_Headshot_Enabled,
+        FOV_Visible = FOV_Visible,
+        Aim_FOV = Aim_FOV,
+        Graphics_Low_Enabled = Graphics_Low_Enabled,
+        Fly_Enabled = Fly_Enabled,
+        Clip_Enabled = Clip_Enabled,
+        Wall_Shoot_Enabled = Wall_Shoot_Enabled,
+        FOV_OffsetX = FOV_OffsetX,
+        FOV_OffsetY = FOV_OffsetY,
+        Auto_Save_Enabled = Auto_Save_Enabled,
+        Auto_Executor_Code = Auto_Executor_Code
+    }
+    local success, encoded = pcall(function()
+        return HttpService:JSONEncode(configData)
+    end)
+    if success then
+        writefile(SaveFileName, encoded)
+    end
+end
+
+-- 1. Nút Menu Hình Tròn
+local ToggleBtn = Instance.new("ImageButton")
+local ToggleCorner = Instance.new("UICorner")
+local ToggleStroke = Instance.new("UIStroke")
+
+ToggleBtn.Name = "NazilMenuButton"
+ToggleBtn.Parent = NazilGui
+ToggleBtn.Position = UDim2.new(0.02, 0, 0.12, 0)
+ToggleBtn.Size = UDim2.new(0, 48, 0, 48)
+ToggleBtn.BackgroundColor3 = DarkBgColor
+ToggleBtn.Active = true
+ToggleBtn.Draggable = true
+
+ToggleCorner.CornerRadius = UDim.new(1, 0)
+ToggleCorner.Parent = ToggleBtn
+ToggleStroke.Parent = ToggleBtn
+ToggleStroke.Color = PinkColor
+ToggleStroke.Thickness = 2
+
+-- 2. Vòng Tròn Aim (FOV)
+FOVFrame = Instance.new("Frame")
+local FOVCorner = Instance.new("UICorner")
+local FOVStroke = Instance.new("UIStroke")
+
+FOVFrame.Name = "FOVCircleUI"
+FOVFrame.Parent = NazilGui
+FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVFrame.Position = UDim2.new(0.5, FOV_OffsetX, 0.5, FOV_OffsetY)
+FOVFrame.Size = UDim2.new(0, Aim_FOV * 2, 0, Aim_FOV * 2)
+FOVFrame.BackgroundTransparency = 1
+FOVFrame.Visible = false
+
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVFrame
+
+FOVStroke.Parent = FOVFrame
+FOVStroke.Color = PinkColor
+FOVStroke.Thickness = 2
+
+-- 3. Đếm số địch hiển thị
+local ScreenCountLabel = Instance.new("TextLabel")
+local ScreenCountStroke = Instance.new("UIStroke")
+
+ScreenCountLabel.Name = "ScreenCountLabel"
+ScreenCountLabel.Parent = NazilGui
+ScreenCountLabel.Position = UDim2.new(0.02, 0, 0.23, 0)
+ScreenCountLabel.Size = UDim2.new(0, 160, 0, 24)
+ScreenCountLabel.BackgroundTransparency = 1
+ScreenCountLabel.Text = "Địch hiện thấy: 0"
+ScreenCountLabel.TextColor3 = Color3.fromRGB(255, 105, 180)
+ScreenCountLabel.TextSize = 13
+ScreenCountLabel.Font = Enum.Font.SourceSansBold
+ScreenCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+ScreenCountStroke.Parent = ScreenCountLabel
+ScreenCountStroke.Color = Color3.fromRGB(0, 0, 0)
+ScreenCountStroke.Thickness = 1.5
+
+-- 4. Menu Chính
+local MainFrame = Instance.new("Frame")
+local MainCorner = Instance.new("UICorner")
+local MainStroke = Instance.new("UIStroke")
+local TitleLabel = Instance.new("TextLabel")
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = NazilGui
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.Size = UDim2.new(0, 280, 0, 360)
+MainFrame.BackgroundColor3 = DarkBgColor
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = true 
+
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+MainStroke.Parent = MainFrame
+MainStroke.Color = PinkColor
+MainStroke.Thickness = 1.5
+
+TitleLabel.Parent = MainFrame
+TitleLabel.Position = UDim2.new(0, 0, 0, 10)
+TitleLabel.Size = UDim2.new(1, 0, 0, 24)
+TitleLabel.Text = "NAZIL PRO MAX MENU 💕"
+TitleLabel.TextColor3 = PinkColor
+TitleLabel.TextSize = 13
+TitleLabel.Font = Enum.Font.SourceSansBold
+
+-- Thanh Chuyển Tab (ESP / AIM / DY / AUTO)
+local TabBar = Instance.new("Frame")
+TabBar.Parent = MainFrame
+TabBar.Position = UDim2.new(0.05, 0, 0.13, 0)
+TabBar.Size = UDim2.new(0.9, 0, 0, 30)
+TabBar.BackgroundTransparency = 1
+
+local EspTabBtn = Instance.new("TextButton")
+EspTabBtn.Parent = TabBar
+EspTabBtn.Size = UDim2.new(0.23, 0, 1, 0)
+EspTabBtn.BackgroundColor3 = PinkColor
+EspTabBtn.Text = "ESP"
+EspTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+EspTabBtn.Font = Enum.Font.SourceSansBold
+EspTabBtn.TextSize = 11
+Instance.new("UICorner", EspTabBtn).CornerRadius = UDim.new(0, 6)
+
+local AimTabBtn = Instance.new("TextButton")
+AimTabBtn.Parent = TabBar
+AimTabBtn.Position = UDim2.new(0.25, 0, 0, 0)
+AimTabBtn.Size = UDim2.new(0.23, 0, 1, 0)
+AimTabBtn.BackgroundColor3 = Color3.fromRGB(45, 40, 50)
+AimTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+AimTabBtn.Text = "AIM 🎯"
+AimTabBtn.Font = Enum.Font.SourceSansBold
+AimTabBtn.TextSize = 11
+Instance.new("UICorner", AimTabBtn).CornerRadius = UDim.new(0, 6)
+
+local DyTabBtn = Instance.new("TextButton")
+DyTabBtn.Parent = TabBar
+DyTabBtn.Position = UDim2.new(0.50, 0, 0, 0)
+DyTabBtn.Size = UDim2.new(0.23, 0, 1, 0)
+DyTabBtn.BackgroundColor3 = Color3.fromRGB(45, 40, 50)
+DyTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+DyTabBtn.Text = "DY ⚡"
+DyTabBtn.Font = Enum.Font.SourceSansBold
+DyTabBtn.TextSize = 11
+Instance.new("UICorner", DyTabBtn).CornerRadius = UDim.new(0, 6)
+
+local AutoTabBtn = Instance.new("TextButton")
+AutoTabBtn.Parent = TabBar
+AutoTabBtn.Position = UDim2.new(0.75, 0, 0, 0)
+AutoTabBtn.Size = UDim2.new(0.23, 0, 1, 0)
+AutoTabBtn.BackgroundColor3 = Color3.fromRGB(45, 40, 50)
+AutoTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+AutoTabBtn.Text = "AUTO"
+AutoTabBtn.Font = Enum.Font.SourceSansBold
+AutoTabBtn.TextSize = 11
+Instance.new("UICorner", AutoTabBtn).CornerRadius = UDim.new(0, 6)
+
+-- Container Nội Dung
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Parent = MainFrame
+ContentContainer.Position = UDim2.new(0.05, 0, 0.24, 0)
+ContentContainer.Size = UDim2.new(0.9, 0, 0.74, 0)
+ContentContainer.BackgroundTransparency = 1
+
+-- Tab 1: ESP
+local EspFrame = Instance.new("Frame")
+EspFrame.Parent = ContentContainer
+EspFrame.Size = UDim2.new(1, 0, 1, 0)
+EspFrame.BackgroundTransparency = 1
+EspFrame.Visible = true
+
+SwitchLineBtn = Instance.new("TextButton")
+SwitchLineBtn.Parent = EspFrame
+SwitchLineBtn.Position = UDim2.new(0, 0, 0.01, 0)
+SwitchLineBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchLineBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchLineBtn.Text = "Tia Rọi Đầu: TẮT"
+SwitchLineBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchLineBtn.Font = Enum.Font.SourceSansBold
+SwitchLineBtn.TextSize = 11
+Instance.new("UICorner", SwitchLineBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchWallBtn = Instance.new("TextButton")
+SwitchWallBtn.Parent = EspFrame
+SwitchWallBtn.Position = UDim2.new(0, 0, 0.22, 0)
+SwitchWallBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchWallBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchWallBtn.Text = "Nhìn Xuyên Tường: TẮT"
+SwitchWallBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchWallBtn.Font = Enum.Font.SourceSansBold
+SwitchWallBtn.TextSize = 11
+Instance.new("UICorner", SwitchWallBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchBoxBtn = Instance.new("TextButton")
+SwitchBoxBtn.Parent = EspFrame
+SwitchBoxBtn.Position = UDim2.new(0, 0, 0.43, 0)
+SwitchBoxBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchBoxBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchBoxBtn.Text = "Định Vị Vẽ Hộp (Box): TẮT"
+SwitchBoxBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchBoxBtn.Font = Enum.Font.SourceSansBold
+SwitchBoxBtn.TextSize = 11
+Instance.new("UICorner", SwitchBoxBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchSkeletonBtn = Instance.new("TextButton")
+SwitchSkeletonBtn.Parent = EspFrame
+SwitchSkeletonBtn.Position = UDim2.new(0, 0, 0.64, 0)
+SwitchSkeletonBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchSkeletonBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchSkeletonBtn.Text = "Định Vị Khung Xương (Skeleton): TẮT"
+SwitchSkeletonBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchSkeletonBtn.Font = Enum.Font.SourceSansBold
+SwitchSkeletonBtn.TextSize = 11
+Instance.new("UICorner", SwitchSkeletonBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tab 2: Aim & Helpers
+local AimFrame = Instance.new("Frame")
+AimFrame.Parent = ContentContainer
+AimFrame.Size = UDim2.new(1, 0, 1, 0)
+AimFrame.BackgroundTransparency = 1
+AimFrame.Visible = false
+
+SwitchAutoHeadshotBtn = Instance.new("TextButton")
+SwitchAutoHeadshotBtn.Parent = AimFrame
+SwitchAutoHeadshotBtn.Position = UDim2.new(0, 0, 0.01, 0)
+SwitchAutoHeadshotBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchAutoHeadshotBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchAutoHeadshotBtn.Text = "Aim Silent: TẮT"
+SwitchAutoHeadshotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchAutoHeadshotBtn.Font = Enum.Font.SourceSansBold
+SwitchAutoHeadshotBtn.TextSize = 11
+Instance.new("UICorner", SwitchAutoHeadshotBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchAimMobileBtn = Instance.new("TextButton")
+SwitchAimMobileBtn.Parent = AimFrame
+SwitchAimMobileBtn.Position = UDim2.new(0, 0, 0.22, 0)
+SwitchAimMobileBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchAimMobileBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchAimMobileBtn.Text = "Aim Mobile: TẮT"
+SwitchAimMobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchAimMobileBtn.Font = Enum.Font.SourceSansBold
+SwitchAimMobileBtn.TextSize = 11
+Instance.new("UICorner", SwitchAimMobileBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchHitboxBtn = Instance.new("TextButton")
+SwitchHitboxBtn.Parent = AimFrame
+SwitchHitboxBtn.Position = UDim2.new(0, 0, 0.43, 0)
+SwitchHitboxBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchHitboxBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchHitboxBtn.Text = "Hitbox To (Dễ Bắn): TẮT"
+SwitchHitboxBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchHitboxBtn.Font = Enum.Font.SourceSansBold
+SwitchHitboxBtn.TextSize = 11
+Instance.new("UICorner", SwitchHitboxBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchFOVCircleBtn = Instance.new("TextButton")
+SwitchFOVCircleBtn.Parent = AimFrame
+SwitchFOVCircleBtn.Position = UDim2.new(0, 0, 0.64, 0)
+SwitchFOVCircleBtn.Size = UDim2.new(1, 0, 0, 26)
+SwitchFOVCircleBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchFOVCircleBtn.Text = "Vòng Tròn Aim (FOV): TẮT"
+SwitchFOVCircleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchFOVCircleBtn.Font = Enum.Font.SourceSansBold
+SwitchFOVCircleBtn.TextSize = 11
+Instance.new("UICorner", SwitchFOVCircleBtn).CornerRadius = UDim.new(0, 6)
+
+-- Điều chỉnh kích thước vòng Aim và Vị trí
+local AdjustContainer = Instance.new("Frame")
+AdjustContainer.Parent = AimFrame
+AdjustContainer.Position = UDim2.new(0, 0, 0.91, 0)
+AdjustContainer.Size = UDim2.new(1, 0, 0, 24)
+AdjustContainer.BackgroundTransparency = 1
+
+local OffsetLabel = Instance.new("TextLabel")
+OffsetLabel.Parent = AdjustContainer
+OffsetLabel.Size = UDim2.new(0.35, 0, 1, 0)
+OffsetLabel.BackgroundTransparency = 1
+OffsetLabel.Text = "FOV Size/Pos:"
+OffsetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+OffsetLabel.TextSize = 10
+OffsetLabel.Font = Enum.Font.SourceSansBold
+OffsetLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local BtnFOVMinus = Instance.new("TextButton")
+BtnFOVMinus.Parent = AdjustContainer
+BtnFOVMinus.Position = UDim2.new(0.36, 0, 0, 0)
+BtnFOVMinus.Size = UDim2.new(0, 20, 0, 20)
+BtnFOVMinus.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnFOVMinus.Text = "[-] "
+BtnFOVMinus.TextColor3 = PinkColor
+BtnFOVMinus.TextSize = 10
+Instance.new("UICorner", BtnFOVMinus).CornerRadius = UDim.new(0, 4)
+
+local BtnFOVPlus = Instance.new("TextButton")
+BtnFOVPlus.Parent = AdjustContainer
+BtnFOVPlus.Position = UDim2.new(0.48, 0, 0, 0)
+BtnFOVPlus.Size = UDim2.new(0, 20, 0, 20)
+BtnFOVPlus.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnFOVPlus.Text = "[+]"
+BtnFOVPlus.TextColor3 = PinkColor
+BtnFOVPlus.TextSize = 10
+Instance.new("UICorner", BtnFOVPlus).CornerRadius = UDim.new(0, 4)
+
+local BtnLeft = Instance.new("TextButton")
+BtnLeft.Parent = AdjustContainer
+BtnLeft.Position = UDim2.new(0.60, 0, 0, 0)
+BtnLeft.Size = UDim2.new(0, 18, 0, 20)
+BtnLeft.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnLeft.Text = "◄"
+BtnLeft.TextColor3 = PinkColor
+BtnLeft.TextSize = 9
+Instance.new("UICorner", BtnLeft).CornerRadius = UDim.new(0, 4)
+
+local BtnRight = Instance.new("TextButton")
+BtnRight.Parent = AdjustContainer
+BtnRight.Position = UDim2.new(0.70, 0, 0, 0)
+BtnRight.Size = UDim2.new(0, 18, 0, 20)
+BtnRight.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnRight.Text = "►"
+BtnRight.TextColor3 = PinkColor
+BtnRight.TextSize = 9
+Instance.new("UICorner", BtnRight).CornerRadius = UDim.new(0, 4)
+
+local BtnUp = Instance.new("TextButton")
+BtnUp.Parent = AdjustContainer
+BtnUp.Position = UDim2.new(0.80, 0, 0, 0)
+BtnUp.Size = UDim2.new(0, 18, 0, 20)
+BtnUp.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnUp.Text = "▲"
+BtnUp.TextColor3 = PinkColor
+BtnUp.TextSize = 9
+Instance.new("UICorner", BtnUp).CornerRadius = UDim.new(0, 4)
+
+local BtnDown = Instance.new("TextButton")
+BtnDown.Parent = AdjustContainer
+BtnDown.Position = UDim2.new(0.90, 0, 0, 0)
+BtnDown.Size = UDim2.new(0, 18, 0, 20)
+BtnDown.BackgroundColor3 = Color3.fromRGB(50, 45, 55)
+BtnDown.Text = "▼"
+BtnDown.TextColor3 = PinkColor
+BtnDown.TextSize = 9
+Instance.new("UICorner", BtnDown).CornerRadius = UDim.new(0, 4)
+
+-- Tab 3: DY
+local DyFrame = Instance.new("Frame")
+DyFrame.Parent = ContentContainer
+DyFrame.Size = UDim2.new(1, 0, 1, 0)
+DyFrame.BackgroundTransparency = 1
+DyFrame.Visible = false
+
+SwitchFlyBtn = Instance.new("TextButton")
+SwitchFlyBtn.Parent = DyFrame
+SwitchFlyBtn.Position = UDim2.new(0, 0, 0.02, 0)
+SwitchFlyBtn.Size = UDim2.new(1, 0, 0, 30)
+SwitchFlyBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchFlyBtn.Text = "Chức Năng Bay (Fly): TẮT"
+SwitchFlyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchFlyBtn.Font = Enum.Font.SourceSansBold
+SwitchFlyBtn.TextSize = 11
+Instance.new("UICorner", SwitchFlyBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchNoclipBtn = Instance.new("TextButton")
+SwitchNoclipBtn.Parent = DyFrame
+SwitchNoclipBtn.Position = UDim2.new(0, 0, 0.27, 0)
+SwitchNoclipBtn.Size = UDim2.new(1, 0, 0, 30)
+SwitchNoclipBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchNoclipBtn.Text = "Xuyên Tường (Noclip): TẮT"
+SwitchNoclipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchNoclipBtn.Font = Enum.Font.SourceSansBold
+SwitchNoclipBtn.TextSize = 11
+Instance.new("UICorner", SwitchNoclipBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchWallShootBtn = Instance.new("TextButton")
+SwitchWallShootBtn.Parent = DyFrame
+SwitchWallShootBtn.Position = UDim2.new(0, 0, 0.52, 0)
+SwitchWallShootBtn.Size = UDim2.new(1, 0, 0, 30)
+SwitchWallShootBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchWallShootBtn.Text = "Bắn Xuyên Tường: TẮT"
+SwitchWallShootBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchWallShootBtn.Font = Enum.Font.SourceSansBold
+SwitchWallShootBtn.TextSize = 11
+Instance.new("UICorner", SwitchWallShootBtn).CornerRadius = UDim.new(0, 6)
+
+SwitchGraphicsBtn = Instance.new("TextButton")
+SwitchGraphicsBtn.Parent = DyFrame
+SwitchGraphicsBtn.Position = UDim2.new(0, 0, 0.77, 0)
+SwitchGraphicsBtn.Size = UDim2.new(1, 0, 0, 30)
+SwitchGraphicsBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+SwitchGraphicsBtn.Text = "Giảm Đồ Họa 50% (FPS Boost): TẮT"
+SwitchGraphicsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchGraphicsBtn.Font = Enum.Font.SourceSansBold
+SwitchGraphicsBtn.TextSize = 11
+Instance.new("UICorner", SwitchGraphicsBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tab 4: AUTO (Auto Save & Auto Executor chung 1 tab)
+local AutoFrame = Instance.new("Frame")
+AutoFrame.Parent = ContentContainer
+AutoFrame.Size = UDim2.new(1, 0, 1, 0)
+AutoFrame.BackgroundTransparency = 1
+AutoFrame.Visible = false
+
+-- Nút Bật/Tắt Auto Save
+SwitchAutoSaveBtn = Instance.new("TextButton")
+SwitchAutoSaveBtn.Parent = AutoFrame
+SwitchAutoSaveBtn.Position = UDim2.new(0, 0, 0.02, 0)
+SwitchAutoSaveBtn.Size = UDim2.new(1, 0, 0, 30)
+SwitchAutoSaveBtn.BackgroundColor3 = PinkColor
+SwitchAutoSaveBtn.Text = "Auto Save: BẬT"
+SwitchAutoSaveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchAutoSaveBtn.Font = Enum.Font.SourceSansBold
+SwitchAutoSaveBtn.TextSize = 11
+Instance.new("UICorner", SwitchAutoSaveBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tiêu đề cho phần Auto Executor
+local AutoExecLabel = Instance.new("TextLabel")
+AutoExecLabel.Parent = AutoFrame
+AutoExecLabel.Position = UDim2.new(0, 0, 0.38, 0)
+AutoExecLabel.Size = UDim2.new(1, 0, 0, 20)
+AutoExecLabel.BackgroundTransparency = 1
+AutoExecLabel.Text = "Auto Executor (Nhập code chạy khi vào game):"
+AutoExecLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+AutoExecLabel.TextSize = 11
+AutoExecLabel.Font = Enum.Font.SourceSansBold
+AutoExecLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Ô nhập lệnh Auto Executor
+AutoExecTextBox = Instance.new("TextBox")
+AutoExecTextBox.Parent = AutoFrame
+AutoExecTextBox.Position = UDim2.new(0, 0, 0.50, 0)
+AutoExecTextBox.Size = UDim2.new(1, 0, 0, 75)
+AutoExecTextBox.BackgroundColor3 = Color3.fromRGB(35, 30, 40)
+AutoExecTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoExecTextBox.PlaceholderText = "-- Nhập mã script Lua ở đây..."
+AutoExecTextBox.Text = ""
+AutoExecTextBox.TextSize = 11
+AutoExecTextBox.Font = Enum.Font.SourceSans
+AutoExecTextBox.MultiLine = true
+AutoExecTextBox.ClearTextOnFocus = false
+Instance.new("UICorner", AutoExecTextBox).CornerRadius = UDim.new(0, 6)
+local AutoExecStroke = Instance.new("UIStroke")
+AutoExecStroke.Parent = AutoExecTextBox
+AutoExecStroke.Color = PinkColor
+AutoExecStroke.Thickness = 1
+
+-- Nút lưu và chạy thử Auto Executor thủ công
+local BtnSaveExec = Instance.new("TextButton")
+BtnSaveExec.Parent = AutoFrame
+BtnSaveExec.Position = UDim2.new(0, 0, 0.82, 0)
+BtnSaveExec.Size = UDim2.new(1, 0, 0, 30)
+BtnSaveExec.BackgroundColor3 = Color3.fromRGB(60, 50, 60)
+BtnSaveExec.Text = "Lưu & Thực Thi Ngay (Test)"
+BtnSaveExec.TextColor3 = Color3.fromRGB(25
