@@ -1,0 +1,102 @@
+-- ===================================================
+--    FLUENT GUI - FULL ESP, AIMBOT & ALL ITEM TRACKER
+-- ===================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Nạp thư viện Fluent UI
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- Cấu hình mặc định
+local Options = {
+    -- ESP Player
+    PlayerESP = false,
+    PlayerTracer = false,
+    PlayerRainbow = false,
+    PlayerColor = Color3.fromRGB(0, 255, 0),
+
+    -- ESP Quái
+    MobESP = false,
+    MobTracer = false,
+    MobRainbow = false,
+    MobColor = Color3.fromRGB(255, 0, 0),
+
+    -- ESP TẤT CẢ VẬT PHẨM
+    ItemESP = false,
+    ItemTracer = false,
+    ItemRainbow = false,
+    ItemColor = Color3.fromRGB(255, 255, 0),
+
+    -- Aimbot & FOV
+    AimbotPlayer = false,
+    AimbotMob = false,
+    FOV_Enabled = false,
+    FOV_Radius = 120,
+    FOV_Rainbow = false,
+    FOV_Color = Color3.fromRGB(0, 255, 255),
+
+    -- Menu Rainbow Border
+    Menu_RainbowBorder = true,
+    Menu_BorderSpeed = 120
+}
+
+-- Tính toán màu cầu vồng
+local rainbowHue = 0
+RunService.RenderStepped:Connect(function(dt)
+    rainbowHue = (rainbowHue + dt * 0.3) % 1
+end)
+
+local function getRainbowColor()
+    return Color3.fromHSV(rainbowHue, 0.9, 1)
+end
+
+-- ===================================================
+--                TẠO CỬA SỔ FLUENT GUI
+-- ===================================================
+local Window = Fluent:CreateWindow({
+    Title = "Menu Hack Universal - Delta",
+    SubTitle = "Full All Item ESP & Tracers",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    PlayerESP = Window:AddTab({ Title = "ESP Player", Icon = "user" }),
+    MobESP = Window:AddTab({ Title = "ESP Quái", Icon = "skull" }),
+    ItemESP = Window:AddTab({ Title = "ESP Tất Cả Vật Phẩm", Icon = "package" }),
+    Aimbot = Window:AddTab({ Title = "Aimbot", Icon = "crosshair" }),
+    Settings = Window:AddTab({ Title = "Giao Diện", Icon = "settings" })
+}
+
+-- ----------------- 1. TAB PLAYER ESP -----------------
+Tabs.PlayerESP:AddToggle("PlayerESPToggle", { Title = "Hiện ESP Player", Default = false }):OnChanged(function(v) Options.PlayerESP = v end)
+Tabs.PlayerESP:AddToggle("PlayerTracerToggle", { Title = "Hiện Dây Nối Player", Default = false }):OnChanged(function(v) Options.PlayerTracer = v end)
+Tabs.PlayerESP:AddToggle("PlayerRainbowToggle", { Title = "Bật Màu Cầu Vồng (Player)", Default = false }):OnChanged(function(v) Options.PlayerRainbow = v end)
+Tabs.PlayerESP:AddColorpicker("PlayerColorPicker", { Title = "Màu ESP Player Tĩnh", Default = Options.PlayerColor }):OnChanged(function(v) Options.PlayerColor = v end)
+
+-- ----------------- 2. TAB MOB ESP -----------------
+Tabs.MobESP:AddToggle("MobESPToggle", { Title = "Hiện ESP Quái/NPC", Default = false }):OnChanged(function(v) Options.MobESP = v end)
+Tabs.MobESP:AddToggle("MobTracerToggle", { Title = "Hiện Dây Nối Quái", Default = false }):OnChanged(function(v) Options.MobTracer = v end)
+Tabs.MobESP:AddToggle("MobRainbowToggle", { Title = "Bật Màu Cầu Vồng (Quái)", Default = false }):OnChanged(function(v) Options.MobRainbow = v end)
+Tabs.MobESP:AddColorpicker("MobColorPicker", { Title = "Màu ESP Quái Tĩnh", Default = Options.MobColor }):OnChanged(function(v) Options.MobColor = v end)
+
+-- ----------------- 3. TAB ITEM ESP (TẤT CẢ VẬT PHẨM) -----------------
+Tabs.ItemESP:AddSection("Quét Toàn Bộ Vật Phẩm Trong Game")
+Tabs.ItemESP:AddToggle("ItemESPToggle", { Title = "Hiện ESP Tất Cả Vật Phẩm", Default = false }):OnChanged(function(v) Options.ItemESP = v end)
+Tabs.ItemESP:AddToggle("ItemTracerToggle", { Title = "Hiện Dây Nối Đến Vật Phẩm", Default = false }):OnChanged(function(v) Options.ItemTracer = v end)
+Tabs.ItemESP:AddToggle("ItemRainbowToggle", { Title = "Vật Phẩm Màu Cầu Vồng", Default = false }):OnChanged(function(v) Options.ItemRainbow = v end)
+Tabs.ItemESP:AddColorpicker("ItemColorPicker", { Title = "Màu Vật Phẩm Tĩnh", Default = Options.ItemColor }):OnChanged(function(v) Options.ItemColor = v end)
+
+-- ----------------- 4. TAB AIMBOT -----------------
+Tabs.Aimbot:AddToggle("AimPlayerToggle", { Title = "Aimbot Player", Default = false }):OnChanged(function(v) Options.AimbotPlayer = v end)
+Tabs.Aimbot:AddToggle("AimMobToggle", { Title = "Aimbot Quái", Default = false }):OnChanged(function(v) Options.AimbotMob = v end)
+Tabs.Aimbot:AddToggle("FOVToggle", { Title = "Hiện Vòng FOV", Default = false }):OnChanged(function(v) Options.FOV_Enabled = v end)
+Tabs.Aimbot:AddToggle("FOVRainbowToggle", { Title = "FOV Màu Cầu Vồng", Default = false }):OnChanged(function(v) Options.FOV_Rainbow = v end)
+Tabs.Aimbot:AddSlider("FOVSlider", { Title = "Bán Kính FOV", Min = 30, Max =
